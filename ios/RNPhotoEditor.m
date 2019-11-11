@@ -10,6 +10,7 @@
 RCT_EXPORT_MODULE()
 
 NSString *_editImagePath = nil;
+NSString *_imageData = nil;
 
 RCTResponseSenderBlock _onDoneEditing = nil;
 RCTResponseSenderBlock _onCancelEditing = nil;
@@ -25,72 +26,84 @@ RCTResponseSenderBlock _onCancelEditing = nil;
 
 - (void)canceledEditing {
     if (_onCancelEditing == nil) return;
-
+    
     _onCancelEditing(@[]);
 }
 
 RCT_EXPORT_METHOD(Edit:(nonnull NSDictionary *)props onDone:(RCTResponseSenderBlock)onDone onCancel:(RCTResponseSenderBlock)onCancel) {
-
+    
     dispatch_async(dispatch_get_main_queue(), ^{
         _editImagePath = [props objectForKey: @"path"];
-
+        _imageData = [props objectForKey: @"data"];
+        
         _onDoneEditing = onDone;
         _onCancelEditing = onCancel;
-
+        
         PhotoEditorViewController *photoEditor = [[PhotoEditorViewController alloc] initWithNibName:@"PhotoEditorViewController" bundle: [NSBundle bundleForClass:[PhotoEditorViewController class]]];
-
+        photoEditor.modalPresentationStyle = UIModalPresentationFullScreen;
+        
         // Process Image for Editing
-        UIImage *image = [UIImage imageWithContentsOfFile:_editImagePath];
-        if (image == nil) {
-            NSURL *url = [NSURL URLWithString:_editImagePath];
-            NSData *data = [NSData dataWithContentsOfURL:url];
-
-            image = [UIImage imageWithData:data];
+        if (_imageData == nil)
+        {
+            UIImage *image = [UIImage imageWithContentsOfFile:_editImagePath];
+            if (image == nil) {
+                NSURL *url = [NSURL URLWithString:_editImagePath];
+                NSData *data = [NSData dataWithContentsOfURL:url];
+                
+                image = [UIImage imageWithData:data];
+            }
+            
+            photoEditor.image = image;
         }
-
-        photoEditor.image = image;
-
+        else
+        {
+            NSData *data = [[NSData alloc]initWithBase64EncodedString:_imageData options:NSDataBase64DecodingIgnoreUnknownCharacters];
+            UIImage *image = [UIImage imageWithData:data];
+            
+            photoEditor.image = image;
+        }
+        
         // Process Stickers
         NSArray *stickers = [props objectForKey: @"stickers"];
         NSMutableArray *imageStickers = [[NSMutableArray alloc] initWithCapacity:stickers.count];
-
+        
         for (NSString *sticker in stickers) {
             [imageStickers addObject: [UIImage imageNamed: sticker]];
         }
-
+        
         photoEditor.stickers = imageStickers;
-
+        
         //Process Controls
         NSArray *hiddenControls = [props objectForKey: @"hiddenControls"];
         NSMutableArray *passHiddenControls = [[NSMutableArray alloc] initWithCapacity:hiddenControls.count];
-
+        
         for (NSString *hiddenControl in hiddenControls) {
             [passHiddenControls addObject: [[NSString alloc] initWithString: hiddenControl]];
         }
-
-        // photoEditor.hiddenControls = passHiddenControls;
-
+        
+        //        photoEditor.hiddenControls = passHiddenControls;
+        
         //Process Colors
         NSArray *colors = [props objectForKey: @"colors"];
         NSMutableArray *passColors = [[NSMutableArray alloc] initWithCapacity:colors.count];
-
+        
         for (NSString *color in colors) {
             [passColors addObject: [self colorWithHexString: color]];
         }
-
+        
         photoEditor.colors = passColors;
-
+        
         // Invoke Editor
         photoEditor.photoEditorDelegate = self;
-
+        
         id<UIApplicationDelegate> app = [[UIApplication sharedApplication] delegate];
         UINavigationController *rootViewController = ((UINavigationController*) app.window.rootViewController);
-
+        
         if (rootViewController.presentedViewController) {
             [rootViewController.presentedViewController presentViewController:photoEditor animated:YES completion:nil];
             return;
         }
-
+        
         [rootViewController presentViewController:photoEditor animated:YES completion:nil];
     });
 }
